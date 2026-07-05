@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: zbo-jiaohu
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: outputs/gesture-visual-feedback-system
+    pullRequestPreviewsEnabled: true
