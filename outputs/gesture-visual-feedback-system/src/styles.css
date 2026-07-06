@@ -173,11 +173,40 @@ strong {
   justify-content: space-between;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .status {
   color: #aeb7c5;
   font-size: 13px;
   line-height: 1.45;
   margin: -6px 0 0;
+}
+
+.stage:fullscreen {
+  background: #08090d;
+  height: 100dvh;
+  width: 100vw;
+}
+
+.stage.stage-expanded {
+  background: #08090d;
+  bottom: 0;
+  height: 100dvh;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 100vw;
+  z-index: 100;
+}
+
+.stage:fullscreen #gesture-canvas,
+.stage.stage-expanded #gesture-canvas {
+  height: 100dvh;
+  width: 100vw;
 }
 
 h1 {
@@ -223,7 +252,13 @@ h1 {
   }
 
   .panel header {
+    align-items: stretch;
     gap: 10px;
+  }
+
+  .header-actions {
+    flex: 1;
+    justify-content: flex-end;
   }
 
   h1 {
@@ -260,7 +295,7 @@ h1 {
   .upload-control {
     font-size: 14px;
     min-height: 44px;
-    padding: 0 10px;
+    padding: 0 8px;
   }
 
   .status {

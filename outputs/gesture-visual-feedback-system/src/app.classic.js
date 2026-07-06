@@ -412,6 +412,7 @@
       this.camera.position.set(0, 0, 8);
       this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.mobile ? 1.5 : 2));
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.clock = new THREE.Clock();
       this.bounds = { x: 5.6, y: 3.15 };
       this.fieldGroup = new THREE.Group();
@@ -508,6 +509,11 @@
           (texture) => {
             URL.revokeObjectURL(url);
             texture.colorSpace = THREE.SRGBColorSpace;
+            texture.generateMipmaps = false;
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+            texture.needsUpdate = true;
             const image = texture.image || { width: 1, height: 1 };
             const aspect = Math.max(0.3, Math.min(2.4, image.width / image.height || 1));
             const geometry = new THREE.PlaneGeometry(aspect, 1);
@@ -517,7 +523,8 @@
               opacity: 0.86,
               depthWrite: false,
               depthTest: true,
-              side: THREE.DoubleSide
+              side: THREE.DoubleSide,
+              toneMapped: false
             });
             const mesh = new THREE.Mesh(geometry, material);
             const theta = randomInRange(0, Math.PI * 2);
@@ -564,8 +571,8 @@
         if (isFocused) {
           photo.mesh.position.x += (0 - photo.mesh.position.x) * Math.min(1, delta * 5);
           photo.mesh.position.y += (0 - photo.mesh.position.y) * Math.min(1, delta * 5);
-          photo.mesh.position.z += (4.15 - photo.mesh.position.z) * Math.min(1, delta * 5);
-          photo.targetScale = this.mobile ? 2.15 : 3.05;
+          photo.mesh.position.z += (4.55 - photo.mesh.position.z) * Math.min(1, delta * 5);
+          photo.targetScale = this.mobile ? 2.7 : 3.35;
           photo.mesh.renderOrder = 1000;
           photo.mesh.material.depthTest = false;
           photo.mesh.material.opacity += (1 - photo.mesh.material.opacity) * Math.min(1, delta * 5);
@@ -820,10 +827,10 @@
       const verticalVelocity = clamp(((center.y - oldest.y) / elapsed) * 1000, -1.2, 1.2);
 
       let event = null;
-      if (pinchDistance < 0.42 && distance(indexTip, wrist) / palmSize > 1.08) {
-        event = { gesture: Gestures.PINCH, confidence: clamp(1 - pinchDistance, 0.78, 0.97) };
-      } else if (thumbExtended && curledScore >= 3 && extendedCount <= 1) {
+      if (thumbExtended && curledScore >= 2 && extendedCount <= 1) {
         event = { gesture: Gestures.THUMB, confidence: 0.92 };
+      } else if (pinchDistance < 0.38 && (extended.index || distance(indexTip, wrist) / palmSize > 1.15)) {
+        event = { gesture: Gestures.PINCH, confidence: clamp(1 - pinchDistance, 0.78, 0.97) };
       } else if (extendedCount >= 3 && spread > 1.18 && averageTipReach > 1.48) {
         event = { gesture: Gestures.OPEN_PALM, confidence: clamp((spread + thumbSpread + extendedCount * 0.32) / 3, 0.82, 0.98) };
       } else if (extended.index && extended.middle && !extended.ring && !extended.pinky) {
@@ -899,8 +906,8 @@
         audio: false,
         video: {
           facingMode: "user",
-          width: { ideal: mobile ? 360 : 640 },
-          height: { ideal: mobile ? 270 : 480 },
+          width: { ideal: mobile ? 480 : 640 },
+          height: { ideal: mobile ? 360 : 480 },
           frameRate: { ideal: mobile ? 24 : 30, max: 30 }
         }
       };
@@ -1078,7 +1085,7 @@
     const wrist = landmarks[0];
     const tipReach = distance(landmarks[tip], wrist) / palmSize;
     const pipReach = distance(landmarks[pip], wrist) / palmSize;
-    return tipReach < 1.36 || tipReach < pipReach * 1.02;
+    return tipReach < 1.42 || tipReach < pipReach * 1.04;
   }
 
   function isThumbExtended(landmarks, palmSize) {
@@ -1091,7 +1098,11 @@
     const ipReach = distance(thumbIp, wrist) / palmSize;
     const thumbLength = distance(thumbTip, thumbMcp) / palmSize;
     const thumbAwayFromPalm = distance(thumbTip, indexMcp) / palmSize;
-    return tipReach > ipReach * 1.04 && thumbLength > 0.72 && thumbAwayFromPalm > 0.82;
+    const mobile = isMobileViewport();
+    const reachRatio = mobile ? 1.0 : 1.04;
+    const minLength = mobile ? 0.58 : 0.68;
+    const minAway = mobile ? 0.58 : 0.72;
+    return tipReach > ipReach * reachRatio && thumbLength > minLength && thumbAwayFromPalm > minAway;
   }
 
   function isOpenPalmLandmarks(landmarks) {
@@ -1131,6 +1142,7 @@
     const cameraVideo = document.querySelector("#camera-video");
     const handOverlay = document.querySelector("#hand-overlay");
     const cameraToggle = document.querySelector("#camera-toggle");
+    const fullscreenToggle = document.querySelector("#fullscreen-toggle");
     const cameraStatus = document.querySelector("#camera-status");
     const photoInput = document.querySelector("#photo-input");
     const photoStatus = document.querySelector("#photo-status");
@@ -1166,6 +1178,35 @@
       await realCamera.start();
       stage.classList.toggle("camera-on", realCamera.running);
       cameraToggle.textContent = realCamera.running ? "Stop Camera" : "Start Camera";
+    });
+
+    fullscreenToggle.addEventListener("click", async () => {
+      const isNativeFullscreen = document.fullscreenElement === stage;
+      const isExpanded = stage.classList.contains("stage-expanded");
+
+      try {
+        if (isNativeFullscreen || isExpanded) {
+          if (document.fullscreenElement) await document.exitFullscreen();
+          stage.classList.remove("stage-expanded");
+          fullscreenToggle.textContent = "Fullscreen";
+        } else if (stage.requestFullscreen) {
+          await stage.requestFullscreen();
+          fullscreenToggle.textContent = "Exit";
+        } else {
+          stage.classList.add("stage-expanded");
+          fullscreenToggle.textContent = "Exit";
+        }
+        setTimeout(() => controller.renderer.resize(), 80);
+      } catch (error) {
+        stage.classList.toggle("stage-expanded");
+        fullscreenToggle.textContent = stage.classList.contains("stage-expanded") ? "Exit" : "Fullscreen";
+        setTimeout(() => controller.renderer.resize(), 80);
+      }
+    });
+
+    document.addEventListener("fullscreenchange", () => {
+      fullscreenToggle.textContent = document.fullscreenElement === stage ? "Exit" : "Fullscreen";
+      setTimeout(() => controller.renderer.resize(), 80);
     });
 
     mockToggle.addEventListener("click", () => {
