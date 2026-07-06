@@ -916,18 +916,18 @@
     prepare() {
       if (!window.Hands || this.handsReady) return this.handsReady;
       this.handsReady = new Promise(async (resolve) => {
-        const mobile = isMobileViewport();
-        this.hands = new Hands({
-          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-        this.hands.setOptions({
-          maxNumHands: mobile ? 1 : 2,
-          modelComplexity: mobile ? 0 : 1,
-          minDetectionConfidence: mobile ? 0.58 : 0.68,
-          minTrackingConfidence: mobile ? 0.54 : 0.62
-        });
-        this.hands.onResults((results) => this.handleResults(results));
         try {
+          const mobile = isMobileViewport();
+          this.hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+          });
+          this.hands.setOptions({
+            maxNumHands: mobile ? 1 : 2,
+            modelComplexity: mobile ? 0 : 1,
+            minDetectionConfidence: mobile ? 0.58 : 0.68,
+            minTrackingConfidence: mobile ? 0.54 : 0.62
+          });
+          this.hands.onResults((results) => this.handleResults(results));
           if (typeof this.hands.initialize === "function") {
             await this.hands.initialize();
           } else {
@@ -957,10 +957,6 @@
 
     async start() {
       if (this.running) return;
-      if (!window.Hands) {
-        this.onStatus("MediaPipe 加载失败，请检查网络。");
-        return;
-      }
       if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
         this.onStatus("摄像头无法开启：手机浏览器必须使用 HTTPS 链接。");
         return;
@@ -974,7 +970,6 @@
       const mobile = isMobileViewport();
 
       try {
-        const handsReady = this.prepare();
         this.stream = await this.openCameraStream(mobile);
         this.video.srcObject = this.stream;
         this.video.muted = true;
@@ -982,7 +977,11 @@
         await this.video.play();
         this.running = true;
         this.onStatus("摄像头已开启，手势模型加载中...");
-        handsReady
+        if (!window.Hands) {
+          this.onStatus("摄像头已开启，但手势识别库加载失败。请刷新页面或换 Safari/Chrome 打开。");
+          return;
+        }
+        this.prepare()
           .then((hands) => {
             if (!this.running || !hands) return;
             this.processFrame();
@@ -1377,10 +1376,6 @@
         cameraStatus.textContent = message;
       }
     });
-    const warmCameraModel = () => realCamera.prepare();
-    setTimeout(warmCameraModel, 80);
-    cameraToggle.addEventListener("pointerdown", warmCameraModel, { passive: true });
-
     cameraToggle.addEventListener("click", async () => {
       if (realCamera.running) {
         realCamera.stop();
