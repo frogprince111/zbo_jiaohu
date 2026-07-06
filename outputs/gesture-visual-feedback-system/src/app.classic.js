@@ -652,14 +652,16 @@
           this.targets[idx + 2] = Math.sin(theta) * Math.sin(phi) * radius;
         }
 
-        const stiffness = this.mode === "cluster" ? 9.5 : this.mode === "heart" ? 10.5 : 5.8;
-        const damping = this.mode === "spread" ? 0.84 : this.mode === "heart" ? 0.82 : 0.88;
+        const mobileBoost = this.mobile ? 1.22 : 1;
+        const stiffness = (this.mode === "cluster" ? 9.5 : this.mode === "heart" ? 10.5 : this.mode === "spread" ? 7.0 : 6.4) * mobileBoost;
+        const damping = this.mode === "spread" ? 0.8 : this.mode === "heart" ? 0.82 : this.mobile ? 0.84 : 0.88;
         this.velocities[idx] = (this.velocities[idx] + (this.targets[idx] - this.positions[idx]) * stiffness * delta) * damping;
         this.velocities[idx + 1] = (this.velocities[idx + 1] + (this.targets[idx + 1] - this.positions[idx + 1]) * stiffness * delta) * damping;
         this.velocities[idx + 2] = (this.velocities[idx + 2] + (this.targets[idx + 2] - this.positions[idx + 2]) * stiffness * delta) * damping;
-        this.positions[idx] += this.velocities[idx] * delta * 7;
-        this.positions[idx + 1] += this.velocities[idx + 1] * delta * 7;
-        this.positions[idx + 2] += this.velocities[idx + 2] * delta * 7;
+        const positionStep = this.mobile ? 8.2 : 7;
+        this.positions[idx] += this.velocities[idx] * delta * positionStep;
+        this.positions[idx + 1] += this.velocities[idx + 1] * delta * positionStep;
+        this.positions[idx + 2] += this.velocities[idx + 2] * delta * positionStep;
       }
 
       this.geometry.attributes.position.needsUpdate = true;
@@ -927,6 +929,8 @@
           }
         } catch (error) {
           this.handsReady = null;
+          resolve(null);
+          return;
         }
         resolve(this.hands);
       });
@@ -971,16 +975,22 @@
 
       try {
         const handsReady = this.prepare();
-        const streamReady = navigator.mediaDevices.getUserMedia(constraints);
-        this.stream = await streamReady;
-        await handsReady;
+        this.stream = await navigator.mediaDevices.getUserMedia(constraints);
         this.video.srcObject = this.stream;
         this.video.muted = true;
         this.video.playsInline = true;
         await this.video.play();
         this.running = true;
-        this.processFrame();
-        this.onStatus("摄像头运行中。支持拳头、张开手、一个手指、两个手指、大拇指和捏合。");
+        this.onStatus("摄像头已开启，手势模型加载中...");
+        handsReady
+          .then((hands) => {
+            if (!this.running || !hands) return;
+            this.processFrame();
+            this.onStatus("手势识别已就绪。支持拳头、张开手、一个手指、两个手指、大拇指和捏合。");
+          })
+          .catch(() => {
+            if (this.running) this.onStatus("手势模型加载失败，请刷新后重试。");
+          });
       } catch (error) {
         this.running = false;
         this.onStatus(`摄像头无法开启：${formatCameraError(error)}`);
@@ -1029,8 +1039,9 @@
       }
 
       const bothHandsOpen = allHands.length >= 2 && allHands.slice(0, 2).every((hand) => isOpenPalmLandmarks(hand));
-      const event = bothHandsOpen
-        ? { gesture: Gestures.OPEN_PALM, confidence: 0.96, controlY: 0 }
+      const singleHandOpen = isOpenPalmLandmarks(landmarks);
+      const event = bothHandsOpen || singleHandOpen
+        ? { gesture: Gestures.OPEN_PALM, confidence: bothHandsOpen ? 0.96 : 0.9, controlY: 0, immediate: true }
         : this.recognizer.recognize(landmarks);
       if (!event) return;
 
@@ -1042,7 +1053,7 @@
       }
 
       const now = performance.now();
-      const stableEnough = this.stableFrames >= 1;
+      const stableEnough = event.immediate || this.stableFrames >= 1;
       const cooldown = event.gesture === Gestures.TWO_FINGERS ? 42 : event.gesture === Gestures.PINCH ? 900 : isMobileViewport() ? 110 : 160;
 
       if (stableEnough && (event.gesture !== this.lastGesture || now - this.lastTriggerTime > cooldown)) {
