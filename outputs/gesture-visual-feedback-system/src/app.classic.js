@@ -898,6 +898,7 @@
       this.stableFrames = 0;
       this.hands = null;
       this.handsReady = null;
+      this.warmupCanvas = null;
       this.stream = null;
       this.frameId = 0;
       this.processingFrame = false;
@@ -906,21 +907,42 @@
 
     prepare() {
       if (!window.Hands || this.handsReady) return this.handsReady;
-      this.handsReady = new Promise((resolve) => {
+      this.handsReady = new Promise(async (resolve) => {
         const mobile = isMobileViewport();
         this.hands = new Hands({
           locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
         this.hands.setOptions({
-          maxNumHands: 2,
-          modelComplexity: 1,
+          maxNumHands: mobile ? 1 : 2,
+          modelComplexity: mobile ? 0 : 1,
           minDetectionConfidence: mobile ? 0.58 : 0.68,
           minTrackingConfidence: mobile ? 0.54 : 0.62
         });
         this.hands.onResults((results) => this.handleResults(results));
+        try {
+          if (typeof this.hands.initialize === "function") {
+            await this.hands.initialize();
+          } else {
+            await this.hands.send({ image: this.getWarmupCanvas() });
+          }
+        } catch (error) {
+          this.handsReady = null;
+        }
         resolve(this.hands);
       });
       return this.handsReady;
+    }
+
+    getWarmupCanvas() {
+      if (this.warmupCanvas) return this.warmupCanvas;
+      const canvas = document.createElement("canvas");
+      canvas.width = 16;
+      canvas.height = 16;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      this.warmupCanvas = canvas;
+      return canvas;
     }
 
     async start() {
@@ -940,10 +962,10 @@
         audio: false,
         video: {
           facingMode: "user",
-          width: { ideal: mobile ? 720 : 640 },
-          height: { ideal: mobile ? 1280 : 480 },
+          width: { ideal: mobile ? 480 : 640 },
+          height: { ideal: mobile ? 640 : 480 },
           aspectRatio: mobile ? { ideal: 9 / 16 } : { ideal: 4 / 3 },
-          frameRate: { ideal: mobile ? 24 : 30, max: 30 }
+          frameRate: { ideal: mobile ? 30 : 30, max: 30 }
         }
       };
 
@@ -1283,11 +1305,8 @@
       }
     });
     const warmCameraModel = () => realCamera.prepare();
-    if ("requestIdleCallback" in window) {
-      window.requestIdleCallback(warmCameraModel, { timeout: 1200 });
-    } else {
-      setTimeout(warmCameraModel, 500);
-    }
+    setTimeout(warmCameraModel, 80);
+    cameraToggle.addEventListener("pointerdown", warmCameraModel, { passive: true });
 
     cameraToggle.addEventListener("click", async () => {
       if (realCamera.running) {
