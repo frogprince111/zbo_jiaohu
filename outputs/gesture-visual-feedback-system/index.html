@@ -1,69 +1,43 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Gesture Visual Feedback System</title>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js" as="script" crossorigin />
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" as="script" crossorigin />
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands_solution_simd_wasm_bin.wasm" as="fetch" type="application/wasm" crossorigin />
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands_solution_packed_assets.data" as="fetch" crossorigin />
+    <title>互动效果入口</title>
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
-  <body>
-    <main class="app">
-      <section class="stage">
-        <canvas id="gesture-canvas"></canvas>
-        <video id="camera-video" autoplay playsinline muted></video>
-        <canvas id="hand-overlay"></canvas>
-        <button id="stage-exit-fullscreen" class="stage-exit" type="button">退出全屏</button>
-        <div class="hud">
-          <div>
-            <span class="label">Gesture</span>
-            <strong id="gesture-name">waiting</strong>
-          </div>
-          <div>
-            <span class="label">Mode</span>
-            <strong id="effect-name">fullscreen_field</strong>
-          </div>
-          <div>
-            <span class="label">Confidence</span>
-            <strong id="confidence">0.00</strong>
-          </div>
-          <div>
-            <span class="label">Particles</span>
-            <strong id="active-count">0</strong>
-          </div>
+  <body class="home-page">
+    <main class="home-shell">
+      <section class="home-hero">
+        <div class="home-copy">
+          <span class="home-kicker">Interactive Lab</span>
+          <h1>选择一个互动效果</h1>
+          <p>这里会逐步加入多个可体验的互动模块。当前已经接入的是手势粒子控制。</p>
         </div>
       </section>
-      <aside class="panel">
-        <header>
-          <h1>Gesture FX</h1>
-          <div class="header-actions">
-            <button id="fullscreen-toggle" type="button">全屏</button>
-            <button id="camera-toggle" type="button">开启摄像头</button>
-          </div>
-        </header>
-        <p id="camera-status" class="status">摄像头未开启。支持拳头、张开手、一个手指、两个手指、大拇指和捏合。</p>
-        <label class="upload-control">
-          <span>上传照片</span>
-          <input id="photo-input" type="file" accept="image/*" multiple />
-        </label>
-        <p id="photo-status" class="status">还没有上传照片。</p>
-        <button id="mock-toggle" type="button">开始模拟</button>
-        <div class="gesture-grid">
-          <button data-gesture="fist">Fist / 聚合</button>
-          <button data-gesture="open_palm">Open Palm / 铺满</button>
-          <button data-gesture="one_finger">One Finger / 顺时针</button>
-          <button data-gesture="two_fingers">Two Fingers / 逆时针</button>
-          <button data-gesture="thumb">Thumb / 3D Heart</button>
-          <button data-gesture="pinch">Pinch / Random Photo</button>
-        </div>
-      </aside>
+
+      <section class="interaction-grid" aria-label="互动效果列表">
+        <a class="interaction-card interaction-card-active" href="./particle.html">
+          <span class="card-index">01</span>
+          <strong>手势粒子控制</strong>
+          <span>摄像头识别手势，控制粒子聚合、铺满、旋转、爱心和照片聚焦。</span>
+          <em>进入互动</em>
+        </a>
+
+        <article class="interaction-card interaction-card-disabled">
+          <span class="card-index">02</span>
+          <strong>声音视觉互动</strong>
+          <span>预留模块，可接入麦克风音量、节奏或音乐驱动的视觉效果。</span>
+          <em>即将加入</em>
+        </article>
+
+        <article class="interaction-card interaction-card-disabled">
+          <span class="card-index">03</span>
+          <strong>触摸光场互动</strong>
+          <span>预留模块，可用于手机触摸、拖拽、多点触控生成光场效果。</span>
+          <em>即将加入</em>
+        </article>
+      </section>
     </main>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="./src/app.classic.js"></script>
   </body>
 </html>

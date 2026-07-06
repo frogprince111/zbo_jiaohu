@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Gesture Visual Feedback System</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js" as="script" crossorigin />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" as="script" crossorigin />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands_solution_simd_wasm_bin.wasm" as="fetch" type="application/wasm" crossorigin />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands_solution_packed_assets.data" as="fetch" crossorigin />
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="stage">
+        <canvas id="gesture-canvas"></canvas>
+        <video id="camera-video" autoplay playsinline muted></video>
+        <canvas id="hand-overlay"></canvas>
+        <button id="stage-exit-fullscreen" class="stage-exit" type="button">退出全屏</button>
+        <div class="hud">
+          <div>
+            <span class="label">Gesture</span>
+            <strong id="gesture-name">waiting</strong>
+          </div>
+          <div>
+            <span class="label">Mode</span>
+            <strong id="effect-name">fullscreen_field</strong>
+          </div>
+          <div>
+            <span class="label">Confidence</span>
+            <strong id="confidence">0.00</strong>
+          </div>
+          <div>
+            <span class="label">Particles</span>
+            <strong id="active-count">0</strong>
+          </div>
+        </div>
+      </section>
+      <aside class="panel">
+        <header>
+          <h1>Gesture FX</h1>
+          <div class="header-actions">
+            <a class="nav-button" href="./index.html">首页</a>
+            <button id="fullscreen-toggle" type="button">全屏</button>
+            <button id="camera-toggle" type="button">开启摄像头</button>
+          </div>
+        </header>
+        <p id="camera-status" class="status">摄像头未开启。支持拳头、张开手、一个手指、两个手指、大拇指和捏合。</p>
+        <label class="upload-control">
+          <span>上传照片</span>
+          <input id="photo-input" type="file" accept="image/*" multiple />
+        </label>
+        <p id="photo-status" class="status">还没有上传照片。</p>
+        <button id="mock-toggle" type="button">开始模拟</button>
+        <div class="gesture-grid">
+          <button data-gesture="fist">Fist / 聚合</button>
+          <button data-gesture="open_palm">Open Palm / 铺满</button>
+          <button data-gesture="one_finger">One Finger / 顺时针</button>
+          <button data-gesture="two_fingers">Two Fingers / 逆时针</button>
+          <button data-gesture="thumb">Thumb / 3D Heart</button>
+          <button data-gesture="pinch">Pinch / Random Photo</button>
+        </div>
+      </aside>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="./src/app.classic.js"></script>
+  </body>
+</html>
