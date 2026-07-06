@@ -34,18 +34,24 @@
   function formatCameraError(error) {
     const name = error && error.name ? error.name : "";
     if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-      return "permission denied. Allow camera access in the browser.";
+      return "浏览器拒绝了摄像头权限，请在地址栏或浏览器设置里允许摄像头。";
     }
     if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-      return "no camera found.";
+      return "没有找到可用摄像头，请确认当前浏览器可以访问手机摄像头。";
     }
     if (name === "NotReadableError" || name === "TrackStartError") {
-      return "camera is already in use by another app.";
+      return "摄像头可能正被其他 App 占用，请关闭其他拍摄/会议应用后重试。";
+    }
+    if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+      return "当前手机不支持这个摄像头参数，已尝试自动降级，请刷新后重试。";
+    }
+    if (name === "SecurityError") {
+      return "当前页面不允许调用摄像头，请使用 HTTPS 链接并在浏览器中打开。";
     }
     if (location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
-      return "HTTPS is required for camera access on mobile.";
+      return "手机浏览器必须使用 HTTPS 链接才能调用摄像头。";
     }
-    return (error && error.message) || "permission denied";
+    return (error && error.message) || "摄像头权限不可用。";
   }
 
   function normalizeGestureEvent(input) {
@@ -955,6 +961,10 @@
         this.onStatus("MediaPipe 加载失败，请检查网络。");
         return;
       }
+      if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+        this.onStatus("摄像头无法开启：手机浏览器必须使用 HTTPS 链接。");
+        return;
+      }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         this.onStatus("当前浏览器无法调用摄像头，手机请使用 HTTPS 页面。");
         return;
@@ -962,20 +972,10 @@
 
       this.onStatus("摄像头启动中...");
       const mobile = isMobileViewport();
-      const constraints = {
-        audio: false,
-        video: {
-          facingMode: "user",
-          width: { ideal: mobile ? 480 : 640 },
-          height: { ideal: mobile ? 640 : 480 },
-          aspectRatio: mobile ? { ideal: 9 / 16 } : { ideal: 4 / 3 },
-          frameRate: { ideal: mobile ? 30 : 30, max: 30 }
-        }
-      };
 
       try {
         const handsReady = this.prepare();
-        this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+        this.stream = await this.openCameraStream(mobile);
         this.video.srcObject = this.stream;
         this.video.muted = true;
         this.video.playsInline = true;
@@ -993,8 +993,70 @@
           });
       } catch (error) {
         this.running = false;
+        if (this.stream) {
+          this.stream.getTracks().forEach((track) => track.stop());
+          this.stream = null;
+        }
+        if (this.video.srcObject) this.video.srcObject = null;
         this.onStatus(`摄像头无法开启：${formatCameraError(error)}`);
       }
+    }
+
+    async openCameraStream(mobile) {
+      const candidates = this.getCameraConstraintCandidates(mobile);
+      let lastError = null;
+
+      for (const constraints of candidates) {
+        try {
+          return await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (error) {
+          lastError = error;
+          const name = error && error.name ? error.name : "";
+          if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError") break;
+        }
+      }
+
+      throw lastError || new Error("camera unavailable");
+    }
+
+    getCameraConstraintCandidates(mobile) {
+      if (!mobile) {
+        return [
+          {
+            audio: false,
+            video: {
+              facingMode: { ideal: "user" },
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              frameRate: { ideal: 30, max: 30 }
+            }
+          },
+          { audio: false, video: { facingMode: { ideal: "user" } } },
+          { audio: false, video: true }
+        ];
+      }
+
+      return [
+        {
+          audio: false,
+          video: {
+            facingMode: { ideal: "user" },
+            width: { ideal: 360 },
+            height: { ideal: 480 },
+            frameRate: { ideal: 24, max: 30 }
+          }
+        },
+        {
+          audio: false,
+          video: {
+            facingMode: { ideal: "user" },
+            width: { ideal: 320 },
+            height: { ideal: 426 }
+          }
+        },
+        { audio: false, video: { facingMode: { ideal: "user" } } },
+        { audio: false, video: true }
+      ];
     }
 
     processFrame() {
