@@ -906,8 +906,9 @@
         audio: false,
         video: {
           facingMode: "user",
-          width: { ideal: mobile ? 480 : 640 },
-          height: { ideal: mobile ? 360 : 480 },
+          width: { ideal: mobile ? 720 : 640 },
+          height: { ideal: mobile ? 1280 : 480 },
+          aspectRatio: mobile ? { ideal: 9 / 16 } : { ideal: 4 / 3 },
           frameRate: { ideal: mobile ? 24 : 30, max: 30 }
         }
       };
@@ -920,10 +921,10 @@
         await this.video.play();
         this.running = true;
         this.processFrame();
-        this.onStatus("Camera running. Use fist, open palm/both hands, one finger, two fingers, thumb, or pinch.");
+        this.onStatus("摄像头运行中。支持拳头、张开手、一个手指、两个手指、大拇指和捏合。");
       } catch (error) {
         this.running = false;
-        this.onStatus(`Camera blocked: ${formatCameraError(error)}`);
+        this.onStatus(`摄像头无法开启：${formatCameraError(error)}`);
       }
     }
 
@@ -955,7 +956,7 @@
         this.video.srcObject = null;
       }
       this.clearOverlay();
-      this.onStatus("Camera stopped.");
+      this.onStatus("摄像头已关闭。");
     }
 
     handleResults(results) {
@@ -1010,7 +1011,7 @@
       ctx.translate(-width, 0);
       ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
       ctx.fillStyle = "rgba(51, 227, 111, 0.92)";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = isMobileViewport() ? 2.4 : 2;
 
       const chains = [
         [0, 1, 2, 3, 4],
@@ -1022,12 +1023,14 @@
       ];
 
       hands.forEach((landmarks) => {
+        const center = this.getLandmarkSpreadCenter(landmarks, width, height);
         chains.forEach((chain) => {
           ctx.beginPath();
           chain.forEach((index, step) => {
             const point = landmarks[index];
-            const x = point.x * width;
-            const y = point.y * height;
+            const mapped = this.mapLandmarkToOverlay(point, width, height, center);
+            const x = mapped.x;
+            const y = mapped.y;
             if (step === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
           });
@@ -1035,12 +1038,53 @@
         });
 
         landmarks.forEach((point) => {
+          const mapped = this.mapLandmarkToOverlay(point, width, height, center);
           ctx.beginPath();
-          ctx.arc(point.x * width, point.y * height, 3, 0, Math.PI * 2);
+          ctx.arc(mapped.x, mapped.y, isMobileViewport() ? 3.6 : 3, 0, Math.PI * 2);
           ctx.fill();
         });
       });
       ctx.restore();
+    }
+
+    getLandmarkSpreadCenter(landmarks, width, height) {
+      const anchors = [0, 5, 9, 13, 17]
+        .map((index) => this.mapLandmarkToOverlay(landmarks[index], width, height, null))
+        .filter(Boolean);
+      const total = anchors.reduce(
+        (acc, point) => {
+          acc.x += point.x;
+          acc.y += point.y;
+          return acc;
+        },
+        { x: 0, y: 0 }
+      );
+      return {
+        x: total.x / anchors.length,
+        y: total.y / anchors.length
+      };
+    }
+
+    mapLandmarkToOverlay(point, width, height, center) {
+      const videoWidth = this.video.videoWidth || width;
+      const videoHeight = this.video.videoHeight || height;
+      const scale = Math.max(width / videoWidth, height / videoHeight);
+      const drawnWidth = videoWidth * scale;
+      const drawnHeight = videoHeight * scale;
+      const offsetX = (width - drawnWidth) / 2;
+      const offsetY = (height - drawnHeight) / 2;
+
+      const mapped = {
+        x: point.x * videoWidth * scale + offsetX,
+        y: point.y * videoHeight * scale + offsetY
+      };
+      if (!center || !isMobileViewport()) return mapped;
+
+      const spread = 1.16;
+      return {
+        x: clamp(center.x + (mapped.x - center.x) * spread, 2, width - 2),
+        y: clamp(center.y + (mapped.y - center.y) * spread, 2, height - 2)
+      };
     }
 
     clearOverlay() {
@@ -1143,6 +1187,7 @@
     const handOverlay = document.querySelector("#hand-overlay");
     const cameraToggle = document.querySelector("#camera-toggle");
     const fullscreenToggle = document.querySelector("#fullscreen-toggle");
+    const stageExitFullscreen = document.querySelector("#stage-exit-fullscreen");
     const cameraStatus = document.querySelector("#camera-status");
     const photoInput = document.querySelector("#photo-input");
     const photoStatus = document.querySelector("#photo-status");
@@ -1170,42 +1215,50 @@
       if (realCamera.running) {
         realCamera.stop();
         stage.classList.remove("camera-on");
-        cameraToggle.textContent = "Start Camera";
+        cameraToggle.textContent = "开启摄像头";
         return;
       }
       stream.stop();
-      mockToggle.textContent = "Start Mock";
+      mockToggle.textContent = "开始模拟";
       await realCamera.start();
       stage.classList.toggle("camera-on", realCamera.running);
-      cameraToggle.textContent = realCamera.running ? "Stop Camera" : "Start Camera";
+      cameraToggle.textContent = realCamera.running ? "关闭摄像头" : "开启摄像头";
     });
 
-    fullscreenToggle.addEventListener("click", async () => {
+    const setFullscreenLabel = (active) => {
+      fullscreenToggle.textContent = active ? "退出全屏" : "全屏";
+    };
+
+    const toggleStageFullscreen = async (forceExit = false) => {
       const isNativeFullscreen = document.fullscreenElement === stage;
       const isExpanded = stage.classList.contains("stage-expanded");
 
       try {
-        if (isNativeFullscreen || isExpanded) {
+        if (forceExit || isNativeFullscreen || isExpanded) {
           if (document.fullscreenElement) await document.exitFullscreen();
           stage.classList.remove("stage-expanded");
-          fullscreenToggle.textContent = "Fullscreen";
+          setFullscreenLabel(false);
         } else if (stage.requestFullscreen) {
           await stage.requestFullscreen();
-          fullscreenToggle.textContent = "Exit";
+          setFullscreenLabel(true);
         } else {
           stage.classList.add("stage-expanded");
-          fullscreenToggle.textContent = "Exit";
+          setFullscreenLabel(true);
         }
         setTimeout(() => controller.renderer.resize(), 80);
       } catch (error) {
-        stage.classList.toggle("stage-expanded");
-        fullscreenToggle.textContent = stage.classList.contains("stage-expanded") ? "Exit" : "Fullscreen";
+        if (forceExit) stage.classList.remove("stage-expanded");
+        else stage.classList.toggle("stage-expanded");
+        setFullscreenLabel(stage.classList.contains("stage-expanded"));
         setTimeout(() => controller.renderer.resize(), 80);
       }
-    });
+    };
+
+    fullscreenToggle.addEventListener("click", () => toggleStageFullscreen());
+    stageExitFullscreen.addEventListener("click", () => toggleStageFullscreen(true));
 
     document.addEventListener("fullscreenchange", () => {
-      fullscreenToggle.textContent = document.fullscreenElement === stage ? "Exit" : "Fullscreen";
+      setFullscreenLabel(document.fullscreenElement === stage || stage.classList.contains("stage-expanded"));
       setTimeout(() => controller.renderer.resize(), 80);
     });
 
@@ -1213,17 +1266,17 @@
       if (realCamera.running) {
         realCamera.stop();
         stage.classList.remove("camera-on");
-        cameraToggle.textContent = "Start Camera";
+        cameraToggle.textContent = "开启摄像头";
       }
       const running = stream.toggle();
-      mockToggle.textContent = running ? "Stop Mock" : "Start Mock";
-      cameraStatus.textContent = running ? "Mock stream running." : "Camera idle. Use fist, open palm/both hands, one finger, two fingers, thumb, or pinch.";
+      mockToggle.textContent = running ? "停止模拟" : "开始模拟";
+      cameraStatus.textContent = running ? "模拟手势运行中。" : "摄像头未开启。支持拳头、张开手、一个手指、两个手指、大拇指和捏合。";
     });
 
     photoInput.addEventListener("change", () => {
-      photoStatus.textContent = "Loading photos...";
+      photoStatus.textContent = "照片加载中...";
       controller.addPhotoFiles(photoInput.files, (count) => {
-        photoStatus.textContent = count ? `${count} photo${count === 1 ? "" : "s"} uploaded.` : "No photos uploaded.";
+        photoStatus.textContent = count ? `已上传 ${count} 张照片。` : "还没有上传照片。";
       });
       photoInput.value = "";
     });

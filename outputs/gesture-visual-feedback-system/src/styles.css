@@ -95,6 +95,7 @@ button:hover {
   position: absolute;
   right: 18px;
   width: 240px;
+  z-index: 3;
 }
 
 #camera-video {
@@ -129,6 +130,7 @@ button:hover {
   grid-template-columns: repeat(4, minmax(120px, 1fr));
   gap: 10px;
   pointer-events: none;
+  z-index: 2;
 }
 
 .hud > div,
@@ -207,6 +209,36 @@ strong {
 .stage.stage-expanded #gesture-canvas {
   height: 100dvh;
   width: 100vw;
+}
+
+.stage-exit {
+  display: none;
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  top: max(12px, env(safe-area-inset-top));
+  z-index: 5;
+}
+
+.stage:fullscreen .hud,
+.stage.stage-expanded .hud {
+  display: none;
+}
+
+.stage:fullscreen .stage-exit,
+.stage.stage-expanded .stage-exit {
+  display: block;
+}
+
+.stage:fullscreen #camera-video,
+.stage:fullscreen #hand-overlay,
+.stage.stage-expanded #camera-video,
+.stage.stage-expanded #hand-overlay {
+  bottom: max(12px, env(safe-area-inset-bottom));
+  height: min(34vh, 190px);
+  max-height: calc(100dvh - 86px);
+  max-width: calc(100vw - 24px);
+  right: max(12px, env(safe-area-inset-right));
+  width: min(34vw, 190px);
 }
 
 h1 {
@@ -306,9 +338,9 @@ h1 {
   #camera-video,
   #hand-overlay {
     bottom: 10px;
-    height: 108px;
+    height: 132px;
     right: 10px;
-    width: 144px;
+    width: 99px;
   }
 }
 
@@ -323,7 +355,17 @@ h1 {
 
   #camera-video,
   #hand-overlay {
-    height: 90px;
-    width: 120px;
+    height: 120px;
+    width: 90px;
+  }
+
+  .stage:fullscreen #camera-video,
+  .stage:fullscreen #hand-overlay,
+  .stage.stage-expanded #camera-video,
+  .stage.stage-expanded #hand-overlay {
+    bottom: max(10px, env(safe-area-inset-bottom));
+    height: min(28dvh, 156px);
+    right: max(10px, env(safe-area-inset-right));
+    width: min(25dvw, 112px);
   }
 }

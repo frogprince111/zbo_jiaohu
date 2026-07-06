@@ -12,6 +12,7 @@
         <canvas id="gesture-canvas"></canvas>
         <video id="camera-video" autoplay playsinline muted></video>
         <canvas id="hand-overlay"></canvas>
+        <button id="stage-exit-fullscreen" class="stage-exit" type="button">退出全屏</button>
         <div class="hud">
           <div>
             <span class="label">Gesture</span>
@@ -35,17 +36,17 @@
         <header>
           <h1>Gesture FX</h1>
           <div class="header-actions">
-            <button id="fullscreen-toggle" type="button">Fullscreen</button>
-            <button id="camera-toggle" type="button">Start Camera</button>
+            <button id="fullscreen-toggle" type="button">全屏</button>
+            <button id="camera-toggle" type="button">开启摄像头</button>
           </div>
         </header>
-        <p id="camera-status" class="status">Camera idle. Use fist, open palm/both hands, one finger, two fingers, thumb, or pinch.</p>
+        <p id="camera-status" class="status">摄像头未开启。支持拳头、张开手、一个手指、两个手指、大拇指和捏合。</p>
         <label class="upload-control">
-          <span>Upload Photos</span>
+          <span>上传照片</span>
           <input id="photo-input" type="file" accept="image/*" multiple />
         </label>
-        <p id="photo-status" class="status">No photos uploaded.</p>
-        <button id="mock-toggle" type="button">Start Mock</button>
+        <p id="photo-status" class="status">还没有上传照片。</p>
+        <button id="mock-toggle" type="button">开始模拟</button>
         <div class="gesture-grid">
           <button data-gesture="fist">Fist / 聚合</button>
           <button data-gesture="open_palm">Open Palm / 铺满</button>
