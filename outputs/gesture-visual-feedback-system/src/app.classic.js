@@ -31,6 +31,23 @@
     return window.matchMedia("(max-width: 860px), (pointer: coarse)").matches;
   }
 
+  function formatCameraError(error) {
+    const name = error && error.name ? error.name : "";
+    if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+      return "permission denied. Allow camera access in the browser.";
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return "no camera found.";
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      return "camera is already in use by another app.";
+    }
+    if (location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+      return "HTTPS is required for camera access on mobile.";
+    }
+    return (error && error.message) || "permission denied";
+  }
+
   function normalizeGestureEvent(input) {
     return {
       gesture: String((input && input.gesture) || ""),
@@ -848,14 +865,20 @@
       this.stableGesture = "";
       this.stableFrames = 0;
       this.hands = null;
-      this.camera = null;
+      this.stream = null;
+      this.frameId = 0;
+      this.processingFrame = false;
       this.running = false;
     }
 
     async start() {
       if (this.running) return;
-      if (!window.Hands || !window.Camera) {
+      if (!window.Hands) {
         this.onStatus("MediaPipe failed to load. Check network access.");
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        this.onStatus("Camera API unavailable. Use HTTPS on mobile browsers.");
         return;
       }
 
@@ -872,34 +895,56 @@
       this.hands.onResults((results) => this.handleResults(results));
 
       const mobile = isMobileViewport();
-      this.camera = new Camera(this.video, {
-        width: mobile ? 360 : 640,
-        height: mobile ? 270 : 480,
-        onFrame: async () => {
-          if (this.running) await this.hands.send({ image: this.video });
+      const constraints = {
+        audio: false,
+        video: {
+          facingMode: "user",
+          width: { ideal: mobile ? 360 : 640 },
+          height: { ideal: mobile ? 270 : 480 },
+          frameRate: { ideal: mobile ? 24 : 30, max: 30 }
         }
-      });
+      };
 
       try {
-        await this.camera.start();
+        this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+        this.video.srcObject = this.stream;
+        this.video.muted = true;
+        this.video.playsInline = true;
+        await this.video.play();
         this.running = true;
+        this.processFrame();
         this.onStatus("Camera running. Use fist, open palm/both hands, one finger, two fingers, thumb, or pinch.");
       } catch (error) {
         this.running = false;
-        this.onStatus(`Camera blocked: ${error.message || "permission denied"}`);
+        this.onStatus(`Camera blocked: ${formatCameraError(error)}`);
       }
+    }
+
+    processFrame() {
+      if (!this.running) return;
+      this.frameId = requestAnimationFrame(() => this.processFrame());
+      if (this.processingFrame || this.video.readyState < 2) return;
+
+      this.processingFrame = true;
+      this.hands
+        .send({ image: this.video })
+        .catch((error) => {
+          this.onStatus(`Hand tracking error: ${error.message || "unknown error"}`);
+        })
+        .finally(() => {
+          this.processingFrame = false;
+        });
     }
 
     stop() {
       this.running = false;
-      if (this.camera && typeof this.camera.stop === "function") {
-        this.camera.stop();
-      } else if (this.camera && this.camera.h) {
-        this.camera.h.stop();
+      cancelAnimationFrame(this.frameId);
+      this.processingFrame = false;
+      if (this.stream) {
+        this.stream.getTracks().forEach((track) => track.stop());
+        this.stream = null;
       }
-      const stream = this.video.srcObject;
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+      if (this.video.srcObject) {
         this.video.srcObject = null;
       }
       this.clearOverlay();
