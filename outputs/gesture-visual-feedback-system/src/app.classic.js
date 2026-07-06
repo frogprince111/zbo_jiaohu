@@ -533,6 +533,7 @@
               mesh,
               theta,
               phi,
+              aspect,
               radius: randomInRange(2.0, 3.4),
               speed: randomInRange(0.35, 0.9),
               targetScale: 0.42,
@@ -571,8 +572,9 @@
         if (isFocused) {
           photo.mesh.position.x += (0 - photo.mesh.position.x) * Math.min(1, delta * 5);
           photo.mesh.position.y += (0 - photo.mesh.position.y) * Math.min(1, delta * 5);
-          photo.mesh.position.z += (4.55 - photo.mesh.position.z) * Math.min(1, delta * 5);
-          photo.targetScale = this.mobile ? 2.7 : 3.35;
+          const focusZ = this.mobile ? 4.35 : 4.55;
+          photo.mesh.position.z += (focusZ - photo.mesh.position.z) * Math.min(1, delta * 5);
+          photo.targetScale = this.getFocusedPhotoScale(photo, focusZ);
           photo.mesh.renderOrder = 1000;
           photo.mesh.material.depthTest = false;
           photo.mesh.material.opacity += (1 - photo.mesh.material.opacity) * Math.min(1, delta * 5);
@@ -597,6 +599,17 @@
         photo.mesh.scale.setScalar(photo.scale);
         photo.mesh.lookAt(this.camera.position);
       });
+    }
+
+    getFocusedPhotoScale(photo, focusZ) {
+      const distanceToCamera = Math.max(0.5, this.camera.position.z - focusZ);
+      const visibleHeight = 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)) * distanceToCamera;
+      const visibleWidth = visibleHeight * this.camera.aspect;
+      const margin = this.mobile ? 0.72 : 0.82;
+      const maxByHeight = visibleHeight * margin;
+      const maxByWidth = (visibleWidth * margin) / Math.max(0.3, photo.aspect || 1);
+      const desired = this.mobile ? 2.45 : 3.35;
+      return Math.max(0.42, Math.min(desired, maxByHeight, maxByWidth));
     }
 
     update(frameDelta) {
@@ -814,6 +827,7 @@
       const spread = distance(indexTip, pinkyTip) / palmSize;
       const thumbSpread = distance(thumbTip, landmarks[5]) / palmSize;
       const pinchDistance = distance(thumbTip, indexTip) / palmSize;
+      const mobile = isMobileViewport();
       const center = averagePoint([landmarks[0], landmarks[5], landmarks[9], landmarks[13], landmarks[17]]);
       const now = performance.now();
       const averageTipReach = [8, 12, 16, 20].reduce((sum, tip) => sum + distance(landmarks[tip], wrist) / palmSize, 0) / 4;
@@ -827,12 +841,23 @@
       const verticalVelocity = clamp(((center.y - oldest.y) / elapsed) * 1000, -1.2, 1.2);
 
       let event = null;
+      const openPalmScore =
+        extendedCount * 0.34 +
+        clamp((spread - (mobile ? 0.82 : 0.98)) * 0.75, 0, 0.62) +
+        clamp((averageTipReach - (mobile ? 1.22 : 1.34)) * 0.9, 0, 0.54) +
+        clamp((thumbSpread - (mobile ? 0.48 : 0.58)) * 0.45, 0, 0.3);
+      const looksOpenPalm =
+        extendedCount >= 3 &&
+        averageTipReach > (mobile ? 1.28 : 1.42) &&
+        spread > (mobile ? 0.92 : 1.12) &&
+        openPalmScore > (mobile ? 1.22 : 1.38);
+
       if (thumbExtended && curledScore >= 2 && extendedCount <= 1) {
         event = { gesture: Gestures.THUMB, confidence: 0.92 };
       } else if (pinchDistance < 0.38 && (extended.index || distance(indexTip, wrist) / palmSize > 1.15)) {
         event = { gesture: Gestures.PINCH, confidence: clamp(1 - pinchDistance, 0.78, 0.97) };
-      } else if (extendedCount >= 3 && spread > 1.18 && averageTipReach > 1.48) {
-        event = { gesture: Gestures.OPEN_PALM, confidence: clamp((spread + thumbSpread + extendedCount * 0.32) / 3, 0.82, 0.98) };
+      } else if (looksOpenPalm) {
+        event = { gesture: Gestures.OPEN_PALM, confidence: clamp(0.74 + openPalmScore * 0.12, 0.82, 0.98) };
       } else if (extended.index && extended.middle && !extended.ring && !extended.pinky) {
         event = { gesture: Gestures.TWO_FINGERS, confidence: 0.9 };
       } else if (extended.index && !extended.middle && !extended.ring && !extended.pinky) {
@@ -843,14 +868,14 @@
 
       if (!event) return null;
       this.samples.push(event.gesture);
-      if (this.samples.length > 5) this.samples.shift();
+      if (this.samples.length > (isMobileViewport() ? 4 : 5)) this.samples.shift();
 
       const votes = this.samples.reduce((acc, gesture) => {
         acc[gesture] = (acc[gesture] || 0) + 1;
         return acc;
       }, {});
       const winner = Object.keys(votes).sort((a, b) => votes[b] - votes[a])[0];
-      if (votes[winner] < 3) return null;
+      if (votes[winner] < (isMobileViewport() ? 2 : 3)) return null;
 
       return {
         gesture: winner,
@@ -872,35 +897,44 @@
       this.stableGesture = "";
       this.stableFrames = 0;
       this.hands = null;
+      this.handsReady = null;
       this.stream = null;
       this.frameId = 0;
       this.processingFrame = false;
       this.running = false;
     }
 
+    prepare() {
+      if (!window.Hands || this.handsReady) return this.handsReady;
+      this.handsReady = new Promise((resolve) => {
+        const mobile = isMobileViewport();
+        this.hands = new Hands({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        this.hands.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: mobile ? 0.58 : 0.68,
+          minTrackingConfidence: mobile ? 0.54 : 0.62
+        });
+        this.hands.onResults((results) => this.handleResults(results));
+        resolve(this.hands);
+      });
+      return this.handsReady;
+    }
+
     async start() {
       if (this.running) return;
       if (!window.Hands) {
-        this.onStatus("MediaPipe failed to load. Check network access.");
+        this.onStatus("MediaPipe 加载失败，请检查网络。");
         return;
       }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        this.onStatus("Camera API unavailable. Use HTTPS on mobile browsers.");
+        this.onStatus("当前浏览器无法调用摄像头，手机请使用 HTTPS 页面。");
         return;
       }
 
-      this.onStatus("Starting camera...");
-      this.hands = new Hands({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-      });
-      this.hands.setOptions({
-        maxNumHands: 2,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.68,
-        minTrackingConfidence: 0.62
-      });
-      this.hands.onResults((results) => this.handleResults(results));
-
+      this.onStatus("摄像头启动中...");
       const mobile = isMobileViewport();
       const constraints = {
         audio: false,
@@ -914,7 +948,10 @@
       };
 
       try {
-        this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const handsReady = this.prepare();
+        const streamReady = navigator.mediaDevices.getUserMedia(constraints);
+        this.stream = await streamReady;
+        await handsReady;
         this.video.srcObject = this.stream;
         this.video.muted = true;
         this.video.playsInline = true;
@@ -961,8 +998,8 @@
 
     handleResults(results) {
       this.drawHand(results);
-      const landmarks = results.multiHandLandmarks && results.multiHandLandmarks[0];
       const allHands = results.multiHandLandmarks || [];
+      const landmarks = selectPrimaryHand(allHands);
       if (!landmarks) {
         this.stableGesture = "";
         this.stableFrames = 0;
@@ -984,7 +1021,7 @@
 
       const now = performance.now();
       const stableEnough = this.stableFrames >= 1;
-      const cooldown = event.gesture === Gestures.TWO_FINGERS ? 55 : event.gesture === Gestures.PINCH ? 900 : 180;
+      const cooldown = event.gesture === Gestures.TWO_FINGERS ? 42 : event.gesture === Gestures.PINCH ? 900 : isMobileViewport() ? 110 : 160;
 
       if (stableEnough && (event.gesture !== this.lastGesture || now - this.lastTriggerTime > cooldown)) {
         this.lastGesture = event.gesture;
@@ -1104,6 +1141,28 @@
     );
   }
 
+  function selectPrimaryHand(hands) {
+    if (!hands || !hands.length) return null;
+    return hands
+      .slice()
+      .sort((a, b) => handScreenArea(b) - handScreenArea(a))[0];
+  }
+
+  function handScreenArea(landmarks) {
+    if (!landmarks || !landmarks.length) return 0;
+    let minX = 1;
+    let maxX = 0;
+    let minY = 1;
+    let maxY = 0;
+    landmarks.forEach((point) => {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minY = Math.min(minY, point.y);
+      maxY = Math.max(maxY, point.y);
+    });
+    return Math.max(0, maxX - minX) * Math.max(0, maxY - minY);
+  }
+
   function heartPoint(t, fill) {
     const angle = t * Math.PI * 2;
     const x = 16 * Math.pow(Math.sin(angle), 3);
@@ -1118,18 +1177,24 @@
 
   function isFingerExtended(landmarks, tip, pip, mcp, palmSize) {
     const wrist = landmarks[0];
+    const mobile = isMobileViewport();
     const tipReach = distance(landmarks[tip], wrist) / palmSize;
     const pipReach = distance(landmarks[pip], wrist) / palmSize;
     const tipFromMcp = distance(landmarks[tip], landmarks[mcp]) / palmSize;
     const pipFromMcp = distance(landmarks[pip], landmarks[mcp]) / palmSize;
-    return tipReach > pipReach * 1.05 && tipReach > 1.42 && tipFromMcp > pipFromMcp * 1.18;
+    return (
+      tipReach > pipReach * (mobile ? 1.015 : 1.05) &&
+      tipReach > (mobile ? 1.28 : 1.42) &&
+      tipFromMcp > pipFromMcp * (mobile ? 1.08 : 1.18)
+    );
   }
 
   function isFingerCurled(landmarks, tip, pip, palmSize) {
     const wrist = landmarks[0];
+    const mobile = isMobileViewport();
     const tipReach = distance(landmarks[tip], wrist) / palmSize;
     const pipReach = distance(landmarks[pip], wrist) / palmSize;
-    return tipReach < 1.42 || tipReach < pipReach * 1.04;
+    return tipReach < (mobile ? 1.25 : 1.42) || tipReach < pipReach * (mobile ? 1.01 : 1.04);
   }
 
   function isThumbExtended(landmarks, palmSize) {
@@ -1151,6 +1216,7 @@
 
   function isOpenPalmLandmarks(landmarks) {
     const wrist = landmarks[0];
+    const mobile = isMobileViewport();
     const palmSize = Math.max(distance(landmarks[0], landmarks[9]), distance(landmarks[5], landmarks[17]), 0.001);
     const extendedCount = [
       isFingerExtended(landmarks, 8, 6, 5, palmSize),
@@ -1159,8 +1225,14 @@
       isFingerExtended(landmarks, 20, 18, 17, palmSize)
     ].filter(Boolean).length;
     const spread = distance(landmarks[8], landmarks[20]) / palmSize;
+    const thumbSpread = distance(landmarks[4], landmarks[5]) / palmSize;
     const averageTipReach = [8, 12, 16, 20].reduce((sum, tip) => sum + distance(landmarks[tip], wrist) / palmSize, 0) / 4;
-    return extendedCount >= 3 && spread > 1.12 && averageTipReach > 1.44;
+    return (
+      extendedCount >= 3 &&
+      spread > (mobile ? 0.9 : 1.12) &&
+      averageTipReach > (mobile ? 1.28 : 1.44) &&
+      thumbSpread > (mobile ? 0.46 : 0.56)
+    );
   }
 
   function angleDelta(a, b) {
@@ -1210,6 +1282,12 @@
         cameraStatus.textContent = message;
       }
     });
+    const warmCameraModel = () => realCamera.prepare();
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(warmCameraModel, { timeout: 1200 });
+    } else {
+      setTimeout(warmCameraModel, 500);
+    }
 
     cameraToggle.addEventListener("click", async () => {
       if (realCamera.running) {
