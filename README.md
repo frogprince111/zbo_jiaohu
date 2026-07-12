@@ -36,3 +36,9 @@ Render provides HTTPS, which is required for camera access on mobile browsers.
 - Thumb: 3D heart particle shape
 - Pinch: randomly focus one uploaded photo in the center
 - Mobile responsive layout and reduced particle load
+- A second mobile-ready hand-gesture module with a transparent 3D cube and eight detailed object models
+- Front-camera support on iOS and Android, including portrait/landscape resizing and an in-page fullscreen fallback
+
+## Mobile Use
+
+Open the deployed HTTPS address in Safari or Chrome, enter the second module, tap `开启摄像头`, and allow camera access. Camera APIs are blocked on ordinary HTTP addresses, so mobile testing must use the Render HTTPS deployment rather than a LAN IP address.

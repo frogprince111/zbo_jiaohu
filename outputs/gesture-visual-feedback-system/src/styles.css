@@ -236,6 +236,59 @@ button:hover,
   opacity: 1;
 }
 
+.cube-page .stage {
+  background: #000;
+}
+
+.cube-page #camera-video {
+  border: 0;
+  border-radius: 0;
+  bottom: auto;
+  height: 100%;
+  left: 0;
+  object-fit: cover;
+  opacity: 0;
+  right: auto;
+  top: 0;
+  width: 100%;
+  z-index: 0;
+}
+
+.cube-page .stage.camera-on #camera-video {
+  opacity: 1;
+}
+
+.cube-page #gesture-canvas {
+  inset: 0;
+  position: absolute;
+  z-index: 1;
+}
+
+.cube-page #hand-overlay {
+  display: none;
+}
+
+.cube-page .hud {
+  display: none;
+}
+
+.cube-page .stage:fullscreen #camera-video,
+.cube-page .stage.stage-expanded #camera-video {
+  bottom: auto;
+  height: 100dvh;
+  left: 0;
+  max-height: none;
+  max-width: none;
+  right: auto;
+  top: 0;
+  width: 100vw;
+}
+
+.cube-page .stage:fullscreen #hand-overlay,
+.cube-page .stage.stage-expanded #hand-overlay {
+  display: none;
+}
+
 .hud {
   position: absolute;
   left: 20px;
@@ -419,6 +472,10 @@ h1 {
     min-height: 0;
   }
 
+  .cube-page .stage {
+    min-height: 52dvh;
+  }
+
   .panel {
     border-width: 1px 0 0;
     gap: 10px;
@@ -426,6 +483,10 @@ h1 {
     overflow-y: auto;
     padding: 14px max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
     -webkit-overflow-scrolling: touch;
+  }
+
+  .cube-page .panel {
+    max-height: 48dvh;
   }
 
   .panel header {
@@ -496,9 +557,41 @@ h1 {
   }
 }
 
+@media (max-width: 860px) and (orientation: landscape) {
+  .cube-page .app {
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 36vw);
+    grid-template-rows: 1fr;
+  }
+
+  .cube-page .stage {
+    min-height: 100dvh;
+  }
+
+  .cube-page .panel {
+    border-width: 0 0 0 1px;
+    max-height: 100dvh;
+  }
+
+  .cube-page .panel header {
+    align-items: flex-start;
+  }
+
+  .cube-page .header-actions {
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 420px) {
   .panel {
     max-height: 48dvh;
+  }
+
+  .cube-page .stage {
+    min-height: 54dvh;
+  }
+
+  .cube-page .panel {
+    max-height: 46dvh;
   }
 
   .gesture-grid {
